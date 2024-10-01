@@ -56,6 +56,7 @@ body:
         - Qdrant
         - QuestDB
         - RabbitMQ
+        - Ranger
         - Redpanda
         - Selenium
         - Solace

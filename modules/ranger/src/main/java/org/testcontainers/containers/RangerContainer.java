@@ -10,16 +10,12 @@ import org.testcontainers.lifecycle.Startable;
 import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
-import java.io.File;
-import java.net.URL;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
-
-import static org.testcontainers.utility.MountableFile.forClasspathResource;
 
 /**
  * Testcontainers implementation for Ranger.
@@ -41,7 +37,7 @@ public class RangerContainer extends GenericContainer<RangerContainer> {
 
     public static final int RANGER_PORT = 6080; // policymgr_external_url in install.properties
 
-    private static final DockerImageName DEFAULT_IMAGE_NAME = DockerImageName.parse(IMAGE);
+    public static final DockerImageName DEFAULT_IMAGE_NAME = DockerImageName.parse(IMAGE);
 
     private MountableFile installPropertiesFile = MountableFile.forClasspathResource("rangeradmin-install.properties");
 
@@ -162,20 +158,9 @@ public class RangerContainer extends GenericContainer<RangerContainer> {
         getWaitStrategy().waitUntilReady(this);
     }
 
-    protected void waitForDefaultAuditStoreContainerStarted() {
-        this.defaultAuditStore.waitUntilContainerStarted();
-    }
-
     @Override
-//    @SneakyThrows
-    protected void containerIsStarted(InspectContainerResponse containerInfo) {
-
-    }
-
-    @SneakyThrows
-    protected URL resourceToFileUrl(String resource) {
-        return new File(MountableFile.forClasspathResource(resource).getFilesystemPath()).toURI().toURL();
-    }
+    //    @SneakyThrows
+    protected void containerIsStarted(InspectContainerResponse containerInfo) {}
 
     private PostgreSQLContainer<?> defaultRangerDb(DockerImageName defaultImage) {
         return new PostgreSQLContainer<>(defaultImage)
@@ -188,19 +173,23 @@ public class RangerContainer extends GenericContainer<RangerContainer> {
         return new GenericContainer<>(defaultImage)
             .withExposedPorts(SolrContainer.SOLR_PORT)
             .withNetworkAliases("ranger-solr-audit") // :8983 in rangeradmin-install.properties
-            .withEnv(ImmutableMap.<String, String>builder()
-                .put("SOLR_DEPLOYMENT", "standalone")
-                .put("SOLR_SHARDS", "1")
-                .put("SOLR_REPLICATION", "1")
-                .put("xpack.security.enabled", "false")
-                .put("ES_JAVA_OPTS", "-Xms500m -Xmx500m")
-                .put("SOLR_PORT", Integer.toString(SolrContainer.SOLR_PORT))
-                .put("SOLR_HEAP", "800m")
-                .build())
+            .withEnv(
+                ImmutableMap
+                    .<String, String>builder()
+                    .put("SOLR_DEPLOYMENT", "standalone")
+                    .put("SOLR_SHARDS", "1")
+                    .put("SOLR_REPLICATION", "1")
+                    .put("xpack.security.enabled", "false")
+                    .put("ES_JAVA_OPTS", "-Xms500m -Xmx500m")
+                    .put("SOLR_PORT", Integer.toString(SolrContainer.SOLR_PORT))
+                    .put("SOLR_HEAP", "800m")
+                    .build()
+            )
             .withCommand("solr-precreate", "ranger_audits", "/opt/solr/server/solr/configsets/ranger_audits")
             .withCopyFileToContainer(
-                forClasspathResource("solr-conf"),
-                "/opt/solr/server/solr/configsets/ranger_audits/conf")
+                MountableFile.forClasspathResource("solr-conf"),
+                "/opt/solr/server/solr/configsets/ranger_audits/conf"
+            )
             .waitingFor(Wait.forListeningPort());
     }
 }

@@ -1,16 +1,12 @@
 package org.testcontainers.containers;
 
-import com.fasterxml.jackson.core.JsonFactory;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.TreeNode;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.MappingJsonFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.output.BaseConsumer;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
+import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
 import java.io.IOException;
@@ -19,9 +15,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.Charset;
-import java.time.Duration;
 import java.util.Base64;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,31 +23,41 @@ public class RangerContainerTest {
 
     private static final Logger logger = LoggerFactory.getLogger(RangerContainerTest.class);
 
+    private static final DockerImageName RANGER_IMAGE = RangerContainer.DEFAULT_IMAGE_NAME.withTag(
+        RangerContainer.DEFAULT_TAG
+    );
+
     @Test
     public void rangerStandaloneTest() throws IOException, InterruptedException {
         BaseConsumer<?> logs = new Slf4jLogConsumer(logger);
-        logger.info("Creating ranger container");
-        try (RangerContainer container = new RangerContainer().withDefaults()) {
+
+        // rangerContainerUsage {
+        // create ranger with default database and audit store
+        try (RangerContainer container = new RangerContainer(RANGER_IMAGE).withDefaults()) {
+            // override default database and audit store containers
             container
                 .withLogConsumer(logs)
                 .withRangerDbContainerModifier(c -> c.withLogConsumer(logs))
                 .withAuditStoreContainerModifier(c -> c.withLogConsumer(logs))
+                // create default services
                 .withCopyToContainer(
                     MountableFile.forClasspathResource("create-ranger-services.py"),
                     "/home/ranger/scripts/create-ranger-services.py"
                 )
                 .withWaitForServiceCreation("trino")
                 .start();
-            container.waitForDefaultAuditStoreContainerStarted();
             container.waitUntilContainerStarted();
             logger.info(
                 String.format("ranger audit: http://%s:%s", container.getHost(), container.getDefaultAuditStorePort())
             );
             logger.info(String.format("ranger admin: http://%s:%s", container.getHost(), container.getRangerPort()));
+
+            // invoke audit apis
             String response = getRangerAudit(container, "/count");
             int numAuditEntries = new ObjectMapper().readTree(response).path("value").asInt();
             assertThat(numAuditEntries).isGreaterThanOrEqualTo(0);
         }
+        // }
     }
 
     public URI getRangerUri(RangerContainer ranger) {
